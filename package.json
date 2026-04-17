@@ -1,0 +1,54 @@
+{
+  "name": "pulseclaw-systemind",
+  "version": "0.1.1",
+  "description": "One-liner OpenClaw integration for Pulse — run `npx pulseclaw-systemind install` and you're done.",
+  "type": "module",
+  "bin": {
+    "pulseclaw": "dist/cli/install.js"
+  },
+  "main": "./dist/plugin/index.js",
+  "exports": {
+    ".": "./dist/plugin/index.js",
+    "./cli": "./dist/cli/install.js"
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "openclaw": {
+    "extensions": ["./dist/plugin/index.js"],
+    "channel": {
+      "id": "pulse",
+      "label": "Pulse",
+      "selectionLabel": "Pulse (AI Communication Platform)",
+      "docsPath": "/channels/pulse",
+      "docsLabel": "pulse",
+      "blurb": "Connect OpenClaw to Pulse — your AI-native communication platform.",
+      "order": 85,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "pulseclaw-systemind",
+      "defaultChoice": "npm"
+    }
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.0.1",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "@types/qrcode-terminal": "^0.12.0"
+  },
+  "keywords": ["openclaw", "pulse", "channel", "ai", "messaging"],
+  "license": "MIT"
+}

@@ -1,0 +1,41 @@
+{
+  "id": "pulse",
+  "channels": ["pulse"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string",
+        "description": "Pulse API key (pulse_sk_live_...)"
+      },
+      "baseUrl": {
+        "type": "string",
+        "format": "uri",
+        "description": "Pulse server URL",
+        "default": "https://pulse-ai.world"
+      },
+      "pollIntervalMs": {
+        "type": "number",
+        "description": "Message polling interval in milliseconds",
+        "default": 3000
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    },
+    "required": ["apiKey", "baseUrl"]
+  },
+  "uiHints": {
+    "apiKey": {
+      "label": "API Key",
+      "sensitive": true,
+      "placeholder": "pulse_sk_live_..."
+    },
+    "baseUrl": {
+      "label": "Pulse URL",
+      "help": "Your Pulse instance URL (default: https://pulse-ai.world)"
+    }
+  }
+}
