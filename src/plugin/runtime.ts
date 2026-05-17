@@ -1,14 +1,14 @@
-/** Stores the OpenClaw runtime reference for the Pulse plugin */
+/** Stores the OpenClaw runtime reference for the Aicoo plugin */
 
 let _runtime: any = null;
 
-export function setPulseRuntime(runtime: any) {
+export function setAicooRuntime(runtime: any) {
   _runtime = runtime;
 }
 
-export function getPulseRuntime() {
+export function getAicooRuntime() {
   if (!_runtime) {
-    throw new Error("Pulse plugin runtime not initialized");
+    throw new Error("Aicoo plugin runtime not initialized");
   }
   return _runtime;
 }

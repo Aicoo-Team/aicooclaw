@@ -1,10 +1,10 @@
 {
-  "name": "pulseclaw-systemind",
-  "version": "0.1.1",
-  "description": "One-liner OpenClaw integration for Pulse — run `npx pulseclaw-systemind install` and you're done.",
+  "name": "aicooclaw-systemind",
+  "version": "0.1.4",
+  "description": "One-liner OpenClaw integration for Aicoo — run `npx aicooclaw-systemind install` and you're done.",
   "type": "module",
   "bin": {
-    "pulseclaw": "dist/cli/install.js"
+    "aicooclaw": "dist/cli/install.js"
   },
   "main": "./dist/plugin/index.js",
   "exports": {
@@ -21,19 +21,21 @@
     "prepublishOnly": "npm run build"
   },
   "openclaw": {
-    "extensions": ["./dist/plugin/index.js"],
+    "extensions": [
+      "./dist/plugin/index.js"
+    ],
     "channel": {
-      "id": "pulse",
-      "label": "Pulse",
-      "selectionLabel": "Pulse (AI Communication Platform)",
-      "docsPath": "/channels/pulse",
-      "docsLabel": "pulse",
-      "blurb": "Connect OpenClaw to Pulse — your AI-native communication platform.",
+      "id": "aicoo",
+      "label": "Aicoo",
+      "selectionLabel": "Aicoo (AI Communication Platform)",
+      "docsPath": "/channels/aicoo",
+      "docsLabel": "aicoo",
+      "blurb": "Connect OpenClaw to Aicoo — your AI-native communication platform.",
       "order": 85,
       "quickstartAllowFrom": true
     },
     "install": {
-      "npmSpec": "pulseclaw-systemind",
+      "npmSpec": "aicooclaw-systemind",
       "defaultChoice": "npm"
     }
   },
@@ -49,6 +51,12 @@
     "@types/node": "^20.0.0",
     "@types/qrcode-terminal": "^0.12.0"
   },
-  "keywords": ["openclaw", "pulse", "channel", "ai", "messaging"],
+  "keywords": [
+    "openclaw",
+    "aicoo",
+    "channel",
+    "ai",
+    "messaging"
+  ],
   "license": "MIT"
 }

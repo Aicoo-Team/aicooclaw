@@ -1,4 +1,4 @@
-/** Pairing session created by Pulse, consumed by CLI */
+/** Pairing session created by Aicoo, consumed by CLI */
 export interface PairingSession {
   token: string;
   pairUrl: string;
@@ -7,16 +7,18 @@ export interface PairingSession {
 
 /** Result of polling pairing status */
 export interface PairingStatus {
-  status: "pending" | "approved" | "expired";
+  status: "pending" | "approved" | "expired" | "failed";
   apiKey?: string;
   userId?: string;
   userName?: string;
   subAgentId?: number;
   conversationId?: number;
+  error?: string;
+  reason?: string;
 }
 
-/** OpenClaw Pulse channel config (stored in ~/.openclaw/openclaw.json) */
-export interface PulseChannelConfig {
+/** OpenClaw Aicoo channel config */
+export interface AicooChannelConfig {
   apiKey: string;
   baseUrl: string;
   subAgentId?: number;
@@ -25,8 +27,8 @@ export interface PulseChannelConfig {
   enabled?: boolean;
 }
 
-/** Message format between Pulse and OpenClaw */
-export interface PulseMessage {
+/** Message format between Aicoo and OpenClaw */
+export interface AicooMessage {
   id: number;
   role: "user" | "assistant";
   content: string;

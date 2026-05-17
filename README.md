@@ -1,21 +1,21 @@
-# pulseclaw-systemind
+# aicooclaw-systemind
 
-`pulseclaw-systemind` 是一个用于将 **OpenClaw** 一键接入 **Pulse** 的插件包。
+`aicooclaw-systemind` 是一个用于将 **OpenClaw** 一键接入 **Aicoo** 的插件包。
 
 ## 安装
 
 ```bash
-npx pulseclaw-systemind install
+npx aicooclaw-systemind install
 ```
 
-执行后会引导你完成 Pulse 渠道接入。
+执行后会引导你完成 Aicoo 渠道接入。
 
 ## CLI
 
 包内提供命令：
 
 ```bash
-pulseclaw
+aicooclaw
 ```
 
 对应入口：`dist/cli/install.js`

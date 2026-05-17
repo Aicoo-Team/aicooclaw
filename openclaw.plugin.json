@@ -1,19 +1,19 @@
 {
-  "id": "pulse",
-  "channels": ["pulse"],
+  "id": "aicoo",
+  "channels": ["aicoo"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
       "apiKey": {
         "type": "string",
-        "description": "Pulse API key (pulse_sk_live_...)"
+        "description": "Aicoo API key (aicoo_sk_live_...)"
       },
       "baseUrl": {
         "type": "string",
         "format": "uri",
-        "description": "Pulse server URL",
-        "default": "https://pulse-ai.world"
+        "description": "Aicoo server URL",
+        "default": "https://www.aicoo.io"
       },
       "pollIntervalMs": {
         "type": "number",
@@ -31,11 +31,11 @@
     "apiKey": {
       "label": "API Key",
       "sensitive": true,
-      "placeholder": "pulse_sk_live_..."
+      "placeholder": "aicoo_sk_live_..."
     },
     "baseUrl": {
-      "label": "Pulse URL",
-      "help": "Your Pulse instance URL (default: https://pulse-ai.world)"
+      "label": "Aicoo URL",
+      "help": "Your Aicoo instance URL (default: https://www.aicoo.io; local dev: http://localhost:3000)"
     }
   }
 }

@@ -1,36 +1,36 @@
 /**
- * Pulse Channel Plugin for OpenClaw — Entry Point
+ * Aicoo Channel Plugin for OpenClaw — Entry Point
  *
  * This is the main plugin export that OpenClaw discovers and loads.
- * It registers the Pulse channel so OpenClaw can communicate through Pulse.
+ * It registers the Aicoo channel so OpenClaw can communicate through Aicoo.
  */
 
-import { pulsePlugin } from "./channel.js";
-import { setPulseRuntime } from "./runtime.js";
+import { aicooPlugin } from "./channel.js";
+import { setAicooRuntime } from "./runtime.js";
 
 const plugin = {
-  id: "pulse",
-  name: "Pulse",
+  id: "aicoo",
+  name: "Aicoo",
   description:
-    "Connect OpenClaw to Pulse — your AI-native communication platform. " +
-    "Send and receive messages through Pulse just like WhatsApp or Telegram.",
+    "Connect OpenClaw to Aicoo — your AI-native communication platform. " +
+    "Send and receive messages through Aicoo just like WhatsApp or Telegram.",
 
   register(api: any) {
     // Store runtime reference for later use
-    setPulseRuntime(api.runtime);
+    setAicooRuntime(api.runtime);
 
-    // Register the Pulse channel
-    api.registerChannel({ plugin: pulsePlugin });
+    // Register the Aicoo channel
+    api.registerChannel({ plugin: aicooPlugin });
 
     // Log activation
-    const config = api.config?.channels?.pulse;
+    const config = api.config?.channels?.aicoo;
     if (config?.apiKey) {
       console.log(
-        `[pulse] Plugin activated — connected to ${config.baseUrl || "https://pulse-ai.world"}`
+        `[aicoo] Plugin activated — connected to ${config.baseUrl || "https://www.aicoo.io"}`
       );
     } else {
       console.log(
-        "[pulse] Plugin loaded but not configured. Run: npx pulseclaw-systemind install"
+        "[aicoo] Plugin loaded but not configured. Run: npx aicooclaw-systemind install"
       );
     }
   },

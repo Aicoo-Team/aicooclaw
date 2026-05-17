@@ -1,13 +1,13 @@
 /**
- * openclaw-pulse CLI
+ * openclaw-aicoo CLI
  *
- * Usage: npx pulseclaw-systemind install
+ * Usage: npx aicooclaw-systemind install
  *
- * One-liner to connect OpenClaw with Pulse.
+ * One-liner to connect OpenClaw with Aicoo.
  * - Detects OpenClaw installation
  * - Auto-enables chatCompletions endpoint in openclaw.json
  * - Auto-detects gateway port & auth token
- * - Creates a pairing session with Pulse
+ * - Creates a pairing session with Aicoo
  * - Renders QR code in terminal
  * - Waits for user to scan & approve
  * - Writes credentials to OpenClaw config
@@ -17,16 +17,16 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { PairingSession, PairingStatus, PulseChannelConfig } from "../shared/types.js";
+import type { PairingSession, PairingStatus, AicooChannelConfig } from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
 
-const PULSE_DEFAULT_URL = "https://pulse-ai.world";
+const AICOO_DEFAULT_URL = "https://www.aicoo.io";
 const OPENCLAW_CONFIG_DIR = join(homedir(), ".openclaw");
 const OPENCLAW_CONFIG_PATH = join(OPENCLAW_CONFIG_DIR, "openclaw.json");
-const PULSE_CREDS_DIR = join(OPENCLAW_CONFIG_DIR, "credentials", "pulse");
+const AICOO_CREDS_DIR = join(OPENCLAW_CONFIG_DIR, "credentials", "aicoo");
 
 // ---------------------------------------------------------------------------
 // ASCII Art
@@ -34,12 +34,12 @@ const PULSE_CREDS_DIR = join(OPENCLAW_CONFIG_DIR, "credentials", "pulse");
 
 const BANNER = `
 \x1b[36m
-  ██████╗ ██╗   ██╗██╗     ███████╗███████╗
-  ██╔══██╗██║   ██║██║     ██╔════╝██╔════╝
-  ██████╔╝██║   ██║██║     ███████╗█████╗
-  ██╔═══╝ ██║   ██║██║     ╚════██║██╔══╝
-  ██║     ╚██████╔╝███████╗███████║███████╗
-  ╚═╝      ╚═════╝ ╚══════╝╚══════╝╚══════╝
+   █████╗ ██╗ ██████╗ ██████╗  ██████╗
+  ██╔══██╗██║██╔════╝██╔═══██╗██╔═══██╗
+  ███████║██║██║     ██║   ██║██║   ██║
+  ██╔══██║██║██║     ██║   ██║██║   ██║
+  ██║  ██║██║╚██████╗╚██████╔╝╚██████╔╝
+  ╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═════╝  ╚═════╝
 \x1b[0m
   \x1b[2m× OpenClaw Channel Integration\x1b[0m
 `;
@@ -47,7 +47,7 @@ const BANNER = `
 const SUCCESS_ART = `
 \x1b[32m  ╔══════════════════════════════════════╗
   ║                                      ║
-  ║   ✓  Pulse × OpenClaw Connected!     ║
+  ║   ✓  Aicoo × OpenClaw Connected!     ║
   ║                                      ║
   ╚══════════════════════════════════════╝\x1b[0m
 `;
@@ -71,6 +71,24 @@ function logSuccess(msg: string) {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+function getArgValue(args: string[], flag: string): string | undefined {
+  const idx = args.indexOf(flag);
+  if (idx === -1) return undefined;
+  const val = args[idx + 1];
+  if (!val || val.startsWith("--")) return undefined;
+  return val;
+}
+
+function parseOptionalInt(raw?: string): number | undefined {
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function detectOpenClaw(): { found: boolean; version?: string } {
@@ -132,9 +150,9 @@ function ensureChatCompletionsEnabled(config: Record<string, any>): boolean {
   return wasDisabled;
 }
 
-function savePulseCredentials(creds: PulseChannelConfig) {
-  mkdirSync(PULSE_CREDS_DIR, { recursive: true });
-  const credsPath = join(PULSE_CREDS_DIR, "creds.json");
+function saveAicooCredentials(creds: AicooChannelConfig) {
+  mkdirSync(AICOO_CREDS_DIR, { recursive: true });
+  const credsPath = join(AICOO_CREDS_DIR, "creds.json");
   writeFileSync(credsPath, JSON.stringify(creds, null, 2), { mode: 0o600 });
   return credsPath;
 }
@@ -144,11 +162,12 @@ function savePulseCredentials(creds: PulseChannelConfig) {
 // ---------------------------------------------------------------------------
 
 async function createPairingSession(
-  pulseUrl: string,
+  aicooUrl: string,
   apiEndpoint?: string,
   gatewayToken?: string | null,
 ): Promise<PairingSession> {
-  const res = await fetch(`${pulseUrl}/api/pair`, {
+  const normalizedUrl = normalizeBaseUrl(aicooUrl);
+  const res = await fetch(`${normalizedUrl}/api/pair`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source: "openclaw-cli", apiEndpoint, gatewayToken }),
@@ -163,18 +182,34 @@ async function createPairingSession(
 }
 
 async function pollPairingStatus(
-  pulseUrl: string,
+  aicooUrl: string,
   token: string
 ): Promise<PairingStatus> {
+  const normalizedUrl = normalizeBaseUrl(aicooUrl);
   const res = await fetch(
-    `${pulseUrl}/api/pair/status?token=${encodeURIComponent(token)}`
+    `${normalizedUrl}/api/pair/status?token=${encodeURIComponent(token)}`
   );
 
-  if (!res.ok) {
-    throw new Error(`Pairing status check failed: ${res.status}`);
+  let payload: any = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
   }
 
-  return res.json() as Promise<PairingStatus>;
+  if (!res.ok) {
+    return {
+      status: "failed",
+      error: payload?.error || `HTTP ${res.status}`,
+      reason: payload?.reason,
+    };
+  }
+
+  if (!payload?.status) {
+    return { status: "failed", error: "Invalid status response" };
+  }
+
+  return payload as PairingStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,19 +222,28 @@ async function main() {
 
   if (command !== "install" && command !== "setup") {
     console.log(BANNER);
-    console.log("  Usage: npx pulseclaw-systemind install [--url <pulse-url>]");
+    console.log("  Usage: npx aicooclaw-systemind install [--url <aicoo-url>] [--api-endpoint <openclaw-endpoint>] [--open] [--api-key <aicoo_api_key>] [--sub-agent-id <id>] [--conversation-id <id>]");
     console.log("");
     console.log("  Commands:");
-    console.log("    install    Connect OpenClaw to Pulse (interactive)");
+    console.log("    install    Connect OpenClaw to Aicoo (interactive)");
+    console.log("");
+    console.log("  Manual mode:");
+    console.log("    --api-key <key>        Skip pairing and save credentials directly");
+    console.log("    --sub-agent-id <id>    Optional sub-agent id for webhook delivery");
+    console.log("    --conversation-id <id> Optional default conversation id");
     console.log("");
     process.exit(0);
   }
 
   // Parse --url flag
-  const urlIdx = args.indexOf("--url");
-  const pulseUrl = urlIdx !== -1 && args[urlIdx + 1]
-    ? args[urlIdx + 1]
-    : PULSE_DEFAULT_URL;
+  const aicooUrl = getArgValue(args, "--url")
+    ? getArgValue(args, "--url")!
+    : AICOO_DEFAULT_URL;
+  const manualApiKey = getArgValue(args, "--api-key");
+  const manualSubAgentId = parseOptionalInt(getArgValue(args, "--sub-agent-id"));
+  const manualConversationId = parseOptionalInt(getArgValue(args, "--conversation-id"));
+  const manualApiEndpoint = getArgValue(args, "--api-endpoint");
+  const shouldOpen = args.includes("--open");
 
   console.log(BANNER);
 
@@ -234,24 +278,62 @@ async function main() {
   }
 
   // Step 4: Check if already configured
-  const existingCreds = join(PULSE_CREDS_DIR, "creds.json");
+  const existingCreds = join(AICOO_CREDS_DIR, "creds.json");
   if (existsSync(existingCreds)) {
-    log("Pulse credentials already exist.");
+    log("Aicoo credentials already exist.");
     log("Re-running setup will overwrite existing credentials.");
     log("");
   }
 
+  // Manual mode: skip token-based pairing entirely.
+  if (manualApiKey) {
+    if (!manualApiKey.startsWith("aicoo_sk_")) {
+      logError("Invalid --api-key format. Expected key starting with aicoo_sk_.");
+      process.exit(1);
+    }
+
+    const manualConfig: AicooChannelConfig = {
+      apiKey: manualApiKey,
+      baseUrl: normalizeBaseUrl(aicooUrl),
+      subAgentId: manualSubAgentId,
+      conversationId: manualConversationId,
+      pollIntervalMs: 3000,
+      enabled: true,
+    };
+
+    const credsPath = saveAicooCredentials(manualConfig);
+    logSuccess("Manual key mode enabled (pairing skipped)");
+    logSuccess(`Credentials saved to ${credsPath}`);
+    console.log(SUCCESS_ART);
+    console.log("  \x1b[1mYou're all set!\x1b[0m Manual Aicoo credentials are now configured.");
+    console.log("");
+    console.log("  \x1b[2mTo start OpenClaw gateway:\x1b[0m");
+    console.log("  \x1b[36m  $ openclaw gateway\x1b[0m");
+    console.log("");
+    process.exit(0);
+  }
+
   // Step 5: Create pairing session
-  const apiEndpoint = `http://localhost:${gwPort}/v1/chat/completions`;
-  log(`Connecting to Pulse at ${pulseUrl}...`);
+  const apiEndpoint = manualApiEndpoint
+    ? manualApiEndpoint
+    : `http://localhost:${gwPort}/v1/chat/completions`;
+  log(`Connecting to Aicoo at ${aicooUrl}...`);
+  if (
+    !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(aicooUrl) &&
+    /^http:\/\/(localhost|127\.0\.0\.1):\d+/i.test(apiEndpoint)
+  ) {
+    log(
+      "Warning: apiEndpoint is localhost. If pairing is approved on another device/network, verification may fail."
+    );
+  }
 
   let pairing: PairingSession;
   try {
-    pairing = await createPairingSession(pulseUrl, apiEndpoint, gwToken);
+    pairing = await createPairingSession(aicooUrl, apiEndpoint, gwToken);
   } catch (err: any) {
-    logError(`Cannot reach Pulse server: ${err.message}`);
-    log(`Make sure Pulse is running at ${pulseUrl}`);
-    log("Use --url <your-pulse-url> if running locally");
+    logError(`Cannot reach Aicoo server: ${err.message}`);
+    log(`Make sure Aicoo is running at ${aicooUrl}`);
+    log("Use --url <your-aicoo-url> if running locally");
     process.exit(1);
   }
   logSuccess("Pairing session created");
@@ -259,7 +341,7 @@ async function main() {
   // Step 6: Render QR code
   console.log("");
   console.log("  \x1b[1m\x1b[33m┌────────────────────────────────────────┐\x1b[0m");
-  console.log("  \x1b[1m\x1b[33m│  Scan this QR code to link Pulse       │\x1b[0m");
+  console.log("  \x1b[1m\x1b[33m│  Scan this QR code to link Aicoo       │\x1b[0m");
   console.log("  \x1b[1m\x1b[33m│  Or open the URL below in your browser │\x1b[0m");
   console.log("  \x1b[1m\x1b[33m└────────────────────────────────────────┘\x1b[0m");
   console.log("");
@@ -275,13 +357,19 @@ async function main() {
   logBright(`URL: \x1b[4m${pairing.pairUrl}\x1b[0m`);
   console.log("");
 
-  // Try to open browser automatically
-  try {
-    const openModule = await import("open");
-    await openModule.default(pairing.pairUrl);
-    log("Opened in your default browser");
-  } catch {
-    log("Open the URL above in your browser to approve");
+  // Auto-open is opt-in to avoid accidental token invalidation caused by
+  // browser prefetch/redirect behavior in some web environments.
+  if (shouldOpen) {
+    try {
+      const openModule = await import("open");
+      await openModule.default(pairing.pairUrl);
+      log("Opened in your default browser");
+    } catch {
+      log("Open the URL above in your browser to approve");
+    }
+  } else {
+    log("Auto-open is disabled by default. Paste the URL into your browser after signing in.");
+    log("Use --open to enable automatic browser launch.");
   }
 
   // Step 7: Poll for approval
@@ -298,35 +386,33 @@ async function main() {
     );
 
     try {
-      const status = await pollPairingStatus(pulseUrl, pairing.token);
+      const status = await pollPairingStatus(aicooUrl, pairing.token);
 
       if (status.status === "approved" && status.apiKey) {
         process.stdout.write("\r" + " ".repeat(60) + "\r");
         logSuccess(`Approved by ${status.userName || "user"}!`);
 
         // Step 8: Save credentials & update openclaw.json
-        const apiEndpoint = `http://localhost:${gwPort}/v1/chat/completions`;
-
-        const channelConfig: PulseChannelConfig = {
+        const channelConfig: AicooChannelConfig = {
           apiKey: status.apiKey,
-          baseUrl: pulseUrl,
+          baseUrl: aicooUrl,
           subAgentId: status.subAgentId,
           conversationId: status.conversationId,
           pollIntervalMs: 3000,
           enabled: true,
         };
 
-        const credsPath = savePulseCredentials(channelConfig);
+        const credsPath = saveAicooCredentials(channelConfig);
         logSuccess(`Credentials saved to ${credsPath}`);
 
         // Note: We do NOT write channels/plugins to openclaw.json.
-        // Pulse calls OpenClaw's /v1/chat/completions — no OpenClaw plugin needed.
-        // The credentials in ~/.openclaw/credentials/pulse/creds.json are sufficient.
+        // Aicoo calls OpenClaw's /v1/chat/completions — no OpenClaw plugin needed.
+        // The credentials in ~/.openclaw/credentials/aicoo/creds.json are sufficient.
 
         // Step 9: Success!
         console.log(SUCCESS_ART);
         console.log(
-          "  \x1b[1mYou're all set!\x1b[0m Open Pulse and you'll see OpenClaw"
+          "  \x1b[1mYou're all set!\x1b[0m Open Aicoo and you'll see OpenClaw"
         );
         console.log("  in your contact book. Start chatting!");
         console.log("");
@@ -337,7 +423,7 @@ async function main() {
         console.log("  \x1b[36m  $ openclaw gateway\x1b[0m");
         console.log("");
         console.log("  \x1b[2mTo reconfigure:\x1b[0m");
-        console.log("  \x1b[36m  $ npx pulseclaw-systemind install\x1b[0m");
+        console.log("  \x1b[36m  $ npx aicooclaw-systemind install\x1b[0m");
         console.log("");
 
         process.exit(0);
@@ -346,6 +432,16 @@ async function main() {
       if (status.status === "expired") {
         process.stdout.write("\r" + " ".repeat(60) + "\r");
         logError("Pairing session expired. Run the command again.");
+        process.exit(1);
+      }
+      if (status.status === "failed") {
+        process.stdout.write("\r" + " ".repeat(60) + "\r");
+        const msg = status.error || status.reason || "Unknown error";
+        logError(`Pairing failed: ${msg}`);
+        if (/invalid token/i.test(msg)) {
+          log("Hint: open the pair URL manually in a signed-in browser profile.");
+          log("If needed, rerun with a fresh token and avoid auto-open.");
+        }
         process.exit(1);
       }
     } catch {

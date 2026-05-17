@@ -1,18 +1,16 @@
 /**
- * Pulse Channel Plugin for OpenClaw
+ * Aicoo Channel Plugin for OpenClaw
  *
  * Implements the ChannelPlugin interface so OpenClaw can
- * send and receive messages through Pulse.
+ * send and receive messages through Aicoo.
  *
  * Message flow:
- *   Pulse user sends message
- *     → Pulse POSTs to OpenClaw webhook (/webhook/pulse)
+ *   Aicoo user sends message
+ *     → Aicoo POSTs to OpenClaw webhook (/webhook/aicoo)
  *     → OpenClaw processes with agent
- *     → OpenClaw calls sendText() → POST to Pulse API
- *     → Pulse displays response in chat UI
+ *     → OpenClaw calls sendText() → POST to Aicoo API
+ *     → Aicoo displays response in chat UI
  */
-
-import type { PulseChannelConfig, PulseMessage } from "../shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Types (matching OpenClaw's ChannelPlugin interface)
@@ -33,7 +31,7 @@ interface OutboundDeliveryResult {
   error?: string;
 }
 
-interface ResolvedPulseAccount {
+interface ResolvedAicooAccount {
   accountId: string;
   name: string;
   enabled: boolean;
@@ -44,14 +42,15 @@ interface ResolvedPulseAccount {
 }
 
 // ---------------------------------------------------------------------------
-// Pulse API Client
+// Aicoo API Client
 // ---------------------------------------------------------------------------
 
-async function sendMessageToPulse(
-  account: ResolvedPulseAccount,
+async function sendMessageToAicoo(
+  account: ResolvedAicooAccount,
   to: string, // conversationId
   text: string
 ): Promise<OutboundDeliveryResult> {
+  const baseUrl = normalizeBaseUrl(account.baseUrl);
   const conversationId =
     parseInt(to, 10) || account.conversationId;
 
@@ -61,7 +60,7 @@ async function sendMessageToPulse(
 
   try {
     const res = await fetch(
-      `${account.baseUrl}/api/sub-agents/webhook`,
+      `${baseUrl}/api/sub-agents/webhook`,
       {
         method: "POST",
         headers: {
@@ -80,7 +79,7 @@ async function sendMessageToPulse(
     if (!res.ok) {
       return {
         ok: false,
-        error: `Pulse API returned ${res.status}`,
+        error: `Aicoo API returned ${res.status}`,
       };
     }
 
@@ -94,16 +93,16 @@ async function sendMessageToPulse(
 // Channel Plugin Definition
 // ---------------------------------------------------------------------------
 
-export const pulsePlugin = {
-  id: "pulse" as const,
+export const aicooPlugin = {
+  id: "aicoo" as const,
 
   meta: {
-    id: "pulse",
-    label: "Pulse",
-    selectionLabel: "Pulse (AI Communication Platform)",
-    docsPath: "/channels/pulse",
-    docsLabel: "pulse",
-    blurb: "Pulse messaging platform integration",
+    id: "aicoo",
+    label: "Aicoo",
+    selectionLabel: "Aicoo (AI Communication Platform)",
+    docsPath: "/channels/aicoo",
+    docsLabel: "aicoo",
+    blurb: "Aicoo messaging platform integration",
     order: 85,
   },
 
@@ -117,53 +116,53 @@ export const pulsePlugin = {
   } satisfies ChannelCapabilities,
 
   // ---------------------------------------------------------------------------
-  // Config Adapter — how OpenClaw manages Pulse accounts
+  // Config Adapter — how OpenClaw manages Aicoo accounts
   // ---------------------------------------------------------------------------
   config: {
     listAccountIds(cfg: any): string[] {
-      const pulse = cfg?.channels?.pulse;
-      if (!pulse) return [];
-      if (pulse.accounts) return Object.keys(pulse.accounts);
-      if (pulse.apiKey) return ["default"];
+      const aicoo = cfg?.channels?.aicoo;
+      if (!aicoo) return [];
+      if (aicoo.accounts) return Object.keys(aicoo.accounts);
+      if (aicoo.apiKey) return ["default"];
       return [];
     },
 
     resolveAccount(
       cfg: any,
       accountId: string
-    ): ResolvedPulseAccount | null {
-      const pulse = cfg?.channels?.pulse;
-      if (!pulse) return null;
+    ): ResolvedAicooAccount | null {
+      const aicoo = cfg?.channels?.aicoo;
+      if (!aicoo) return null;
 
-      const acct = pulse.accounts?.[accountId] ?? pulse;
+      const acct = aicoo.accounts?.[accountId] ?? aicoo;
       if (!acct?.apiKey) return null;
 
       return {
         accountId,
-        name: acct.name || "Pulse",
+        name: acct.name || "Aicoo",
         enabled: acct.enabled !== false,
         apiKey: acct.apiKey,
-        baseUrl: acct.baseUrl || "https://pulse-ai.world",
+        baseUrl: normalizeBaseUrl(acct.baseUrl || "https://www.aicoo.io"),
         subAgentId: acct.subAgentId,
         conversationId: acct.conversationId,
       };
     },
 
-    isConfigured(account: ResolvedPulseAccount | null): boolean {
+    isConfigured(account: ResolvedAicooAccount | null): boolean {
       return !!account?.apiKey;
     },
 
-    isEnabled(account: ResolvedPulseAccount | null): boolean {
+    isEnabled(account: ResolvedAicooAccount | null): boolean {
       return !!account?.enabled;
     },
 
-    describeAccount(account: ResolvedPulseAccount): string {
+    describeAccount(account: ResolvedAicooAccount): string {
       return `${account.name} (${account.baseUrl})`;
     },
   },
 
   // ---------------------------------------------------------------------------
-  // Outbound Adapter — OpenClaw → Pulse
+  // Outbound Adapter — OpenClaw → Aicoo
   // ---------------------------------------------------------------------------
   outbound: {
     deliveryMode: "direct" as const,
@@ -176,40 +175,40 @@ export const pulsePlugin = {
       accountId?: string;
     }): Promise<OutboundDeliveryResult> {
       const accountId = ctx.accountId || "default";
-      const account = pulsePlugin.config.resolveAccount(
+      const account = aicooPlugin.config.resolveAccount(
         ctx.cfg,
         accountId
       );
       if (!account) {
-        return { ok: false, error: "Pulse account not configured" };
+        return { ok: false, error: "Aicoo account not configured" };
       }
 
-      return sendMessageToPulse(account, ctx.to, ctx.text);
+      return sendMessageToAicoo(account, ctx.to, ctx.text);
     },
   },
 
   // ---------------------------------------------------------------------------
-  // Gateway Adapter — manages the Pulse connection lifecycle
+  // Gateway Adapter — manages the Aicoo connection lifecycle
   // ---------------------------------------------------------------------------
   gateway: {
     async startAccount(ctx: {
       cfg: any;
       accountId: string;
-      account: ResolvedPulseAccount;
+      account: ResolvedAicooAccount;
       runtime: any;
       abortSignal: AbortSignal;
     }) {
       const { account, runtime, abortSignal } = ctx;
 
       console.log(
-        `[pulse] Channel started for ${account.name} (${account.baseUrl})`
+        `[aicoo] Channel started for ${account.name} (${account.baseUrl})`
       );
 
-      // Register webhook endpoint to receive messages from Pulse
-      // Pulse will POST here when user sends a message to the sub-agent
+      // Register webhook endpoint to receive messages from Aicoo
+      // Aicoo will POST here when user sends a message to the sub-agent
       runtime?.registerHttpRoute?.({
-        path: "/webhook/pulse",
-        auth: "public", // Pulse authenticates via API key in body
+        path: "/webhook/aicoo",
+        auth: "public", // Aicoo authenticates via API key in body
         handler: async (req: any, res: any) => {
           try {
             const body = await readRequestBody(req);
@@ -233,7 +232,7 @@ export const pulsePlugin = {
             // Route message to OpenClaw agent
             // The runtime handles agent dispatch
             console.log(
-              `[pulse] Inbound message from ${senderId}: ${message.substring(0, 50)}...`
+              `[aicoo] Inbound message from ${senderId}: ${message.substring(0, 50)}...`
             );
 
             // Acknowledge receipt immediately
@@ -246,7 +245,7 @@ export const pulsePlugin = {
 
             return true;
           } catch (err: any) {
-            console.error("[pulse] Webhook error:", err.message);
+            console.error("[aicoo] Webhook error:", err.message);
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Internal error" }));
             return true;
@@ -257,16 +256,16 @@ export const pulsePlugin = {
       // Keep alive until shutdown
       return new Promise<void>((resolve) => {
         abortSignal.addEventListener("abort", () => {
-          console.log("[pulse] Channel shutting down");
+          console.log("[aicoo] Channel shutting down");
           resolve();
         });
       });
     },
 
     async logoutAccount(ctx: {
-      account: ResolvedPulseAccount;
+      account: ResolvedAicooAccount;
     }) {
-      console.log(`[pulse] Logged out ${ctx.account.name}`);
+      console.log(`[aicoo] Logged out ${ctx.account.name}`);
       return { cleared: true, loggedOut: true };
     },
   },
@@ -278,10 +277,11 @@ export const pulsePlugin = {
     async probeAccount(ctx: {
       cfg: any;
       accountId: string;
-      account: ResolvedPulseAccount;
+      account: ResolvedAicooAccount;
     }) {
       try {
-        const res = await fetch(`${ctx.account.baseUrl}/api/health`, {
+        const baseUrl = normalizeBaseUrl(ctx.account.baseUrl);
+        const res = await fetch(`${baseUrl}/api/health`, {
           signal: AbortSignal.timeout(5000),
         });
         return {
@@ -309,4 +309,8 @@ function readRequestBody(req: any): Promise<string> {
     req.on("end", () => resolve(body));
     req.on("error", reject);
   });
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
 }
