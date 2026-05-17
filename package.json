@@ -1,6 +1,6 @@
 {
   "name": "aicooclaw-systemind",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "One-liner OpenClaw integration for Aicoo — run `npx aicooclaw-systemind install` and you're done.",
   "type": "module",
   "bin": {

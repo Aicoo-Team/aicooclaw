@@ -157,6 +157,17 @@ function saveAicooCredentials(creds: AicooChannelConfig) {
   return credsPath;
 }
 
+function loadAicooCredentials(): AicooChannelConfig | null {
+  const credsPath = join(AICOO_CREDS_DIR, "creds.json");
+  if (!existsSync(credsPath)) return null;
+
+  try {
+    return JSON.parse(readFileSync(credsPath, "utf-8")) as AicooChannelConfig;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core: Pairing Flow
 // ---------------------------------------------------------------------------
@@ -212,6 +223,128 @@ async function pollPairingStatus(
   return payload as PairingStatus;
 }
 
+async function pollRelayRequest(aicooUrl: string, apiKey: string) {
+  const normalizedUrl = normalizeBaseUrl(aicooUrl);
+  const res = await fetch(`${normalizedUrl}/api/sub-agents/relay/poll`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Relay poll failed: ${res.status} ${text}`);
+  }
+
+  return res.json() as Promise<{ request: null | {
+    id: string;
+    messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  } }>;
+}
+
+async function respondToRelayRequest(
+  aicooUrl: string,
+  apiKey: string,
+  requestId: string,
+  payload: { response?: string; error?: string },
+) {
+  const normalizedUrl = normalizeBaseUrl(aicooUrl);
+  const res = await fetch(`${normalizedUrl}/api/sub-agents/relay/respond`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ requestId, ...payload }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Relay respond failed: ${res.status} ${text}`);
+  }
+}
+
+async function callOpenClaw(apiEndpoint: string, gatewayToken: string | null, messages: Array<{ role: string; content: string }>) {
+  const res = await fetch(apiEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(gatewayToken && { Authorization: `Bearer ${gatewayToken}` }),
+    },
+    body: JSON.stringify({
+      model: "openclaw",
+      messages,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`OpenClaw returned ${res.status}: ${text}`);
+  }
+
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return text;
+  }
+
+  return data.choices?.[0]?.message?.content
+    || data.response
+    || data.text
+    || data.message
+    || JSON.stringify(data);
+}
+
+async function runRelay(options: {
+  aicooUrl: string;
+  apiKey: string;
+  apiEndpoint: string;
+  gatewayToken: string | null;
+}) {
+  logSuccess("Relay running. Keep this terminal open while chatting in Aicoo.");
+  log(`Aicoo: ${options.aicooUrl}`);
+  log(`OpenClaw: ${options.apiEndpoint}`);
+  console.log("");
+
+  while (true) {
+    try {
+      const payload = await pollRelayRequest(options.aicooUrl, options.apiKey);
+      if (!payload.request) {
+        await sleep(1000);
+        continue;
+      }
+
+      log(`Message received from Aicoo (${payload.request.id.slice(0, 8)})`);
+      try {
+        const response = await callOpenClaw(
+          options.apiEndpoint,
+          options.gatewayToken,
+          payload.request.messages,
+        );
+        await respondToRelayRequest(options.aicooUrl, options.apiKey, payload.request.id, {
+          response,
+        });
+        logSuccess("Response delivered to Aicoo");
+      } catch (err: any) {
+        const error = err?.message || String(err);
+        await respondToRelayRequest(options.aicooUrl, options.apiKey, payload.request.id, {
+          error,
+        });
+        logError(`OpenClaw request failed: ${error}`);
+      }
+    } catch (err: any) {
+      logError(err?.message || String(err));
+      await sleep(3000);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -220,12 +353,13 @@ async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (command !== "install" && command !== "setup") {
+  if (command !== "install" && command !== "setup" && command !== "relay") {
     console.log(BANNER);
     console.log("  Usage: npx aicooclaw-systemind install [--url <aicoo-url>] [--api-endpoint <openclaw-endpoint>] [--open] [--api-key <aicoo_api_key>] [--sub-agent-id <id>] [--conversation-id <id>]");
     console.log("");
     console.log("  Commands:");
     console.log("    install    Connect OpenClaw to Aicoo (interactive)");
+    console.log("    relay      Keep the Aicoo ↔ OpenClaw relay running");
     console.log("");
     console.log("  Manual mode:");
     console.log("    --api-key <key>        Skip pairing and save credentials directly");
@@ -246,6 +380,28 @@ async function main() {
   const shouldOpen = args.includes("--open");
 
   console.log(BANNER);
+
+  if (command === "relay") {
+    const ocConfig = readOpenClawConfig();
+    const { port: gwPort, token: gwToken } = getGatewayInfo(ocConfig);
+    const creds = loadAicooCredentials();
+    if (!creds?.apiKey) {
+      logError("Aicoo credentials not found. Run: npx aicooclaw-systemind install");
+      process.exit(1);
+    }
+
+    const apiEndpoint = manualApiEndpoint
+      ? manualApiEndpoint
+      : `http://localhost:${gwPort}/v1/chat/completions`;
+
+    await runRelay({
+      aicooUrl: normalizeBaseUrl(creds.baseUrl || aicooUrl),
+      apiKey: creds.apiKey,
+      apiEndpoint,
+      gatewayToken: gwToken,
+    });
+    return;
+  }
 
   // Step 1: Detect OpenClaw
   log("Detecting OpenClaw installation...");
@@ -309,6 +465,8 @@ async function main() {
     console.log("");
     console.log("  \x1b[2mTo start OpenClaw gateway:\x1b[0m");
     console.log("  \x1b[36m  $ openclaw gateway\x1b[0m");
+    console.log("  \x1b[2mThen keep the Aicoo relay running:\x1b[0m");
+    console.log("  \x1b[36m  $ npx aicooclaw-systemind relay\x1b[0m");
     console.log("");
     process.exit(0);
   }
@@ -419,14 +577,20 @@ async function main() {
         console.log(`  \x1b[2mOpenClaw chatCompletions endpoint:\x1b[0m`);
         console.log(`  \x1b[36m  ${apiEndpoint}\x1b[0m`);
         console.log("");
-        console.log("  \x1b[2mTo start OpenClaw gateway:\x1b[0m");
+        console.log("  \x1b[2mTo start OpenClaw gateway if it is not already running:\x1b[0m");
         console.log("  \x1b[36m  $ openclaw gateway\x1b[0m");
         console.log("");
         console.log("  \x1b[2mTo reconfigure:\x1b[0m");
         console.log("  \x1b[36m  $ npx aicooclaw-systemind install\x1b[0m");
         console.log("");
 
-        process.exit(0);
+        await runRelay({
+          aicooUrl: normalizeBaseUrl(aicooUrl),
+          apiKey: status.apiKey,
+          apiEndpoint,
+          gatewayToken: gwToken,
+        });
+        return;
       }
 
       if (status.status === "expired") {
